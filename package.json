@@ -6,6 +6,7 @@
   "type": "module",
   "scripts": {
     "huffman": "npx tsc & node ./build/HuffmanTree.js",
+    "initorem": "npx tsc & node ./build/LoremInit.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],

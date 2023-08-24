@@ -1,75 +1,67 @@
 import * as fs from "fs";
+import * as url from "url";
 import TreeNode from "./models/TreeNode.js";
 import IElements from "./models/interfaces/IElements.js";
 
+const __dirname = url.fileURLToPath(new URL(".", import.meta.url));
+
 interface IHashCode {
-	element: string;
+	character: string;
 	code: string;
-}
-
-var isFileDone = false;
-
-async function waitFileOperation() {
-	while(!isFileDone) {
-		console.log("Loading file operation...")
-	}
-	console.log("File operation completed.")
 }
 
 const elementNodes = new Array<TreeNode>();
 
 // Read a .txt file and generate a pseudo-binary file from its characters
-fs.readFile("./build/lorem.txt", (err, data) => {
-	let binaryText = "";
+console.info("Reading the lorem.txt file...");
+const loremData = fs.readFileSync(__dirname + "assets/lorem.txt");
+var binaryText = "";
 
-	if (err)
-		return console.error(err);
+for (let hex of loremData) {
+	// Generate a "bit-stream" text from the code of the characters
+	let binary = hex.toString(2);
+	while (binary.length < 8) {
+		binary = '0' + binary;
+	}
+	binaryText += binary;
 
-	for (let hex of data) {
-		// Generate a "bit-stream" text from the code of the characters
-		let binary = hex.toString(2);
-		while (binary.length < 8) {
-			binary = '0' + binary;
-		}
-		binaryText += binary;
+	// Populate the elementNodes array
+	let currentChar = String.fromCharCode(hex);
 
-		// Populate the elementNodes array
-		let currentChar = String.fromCharCode(hex);
+	if (elementNodes.length == 0) {
+		elementNodes.push(new TreeNode({
+			char: currentChar,
+			freq: 1
+		}));
+	} else {
+		for (let i = 0; i < elementNodes.length; i++) {
+			const element = (<IElements>elementNodes[i].value);
+			if (element.char == currentChar) {
+				element.freq++;
+				break;
+			}
 
-		if (elementNodes.length == 0) {
-			elementNodes.push(new TreeNode({
-				char: currentChar,
-				freq: 1
-			}));
-		} else {
-			for (let i = 0; i < elementNodes.length; i++) {
-				const element = (<IElements>elementNodes[i].value);
-				if (element.char == currentChar) {
-					element.freq++;
-					break;
-				}
-	
-				if (i == elementNodes.length - 1) {
-					elementNodes.push(new TreeNode({
-						char: currentChar,
-						freq: 1
-					}));
-					break;
-				}
+			if (i == elementNodes.length - 1) {
+				elementNodes.push(new TreeNode({
+					char: currentChar,
+					freq: 1
+				}));
+				break;
 			}
 		}
 	}
+}
 
-	// Writing pseudo-binary file with the "bit-stream" text
-	fs.writeFile("./build/pseudo-binary-lorem.txt", binaryText, (err) => {
-		if (err)
-			return console.error(err);
-	});
+console.info("Creating a pseudo-binary-lorem.txt file...");
+// Writing pseudo-binary file with the "bit-stream" text
+fs.writeFile(__dirname + "assets/pseudo-binary-lorem.txt", binaryText, (err) => {
+	if (err)
+		return console.error(err);
 });
 
 const hashMap = new Array<IHashCode>(elementNodes.length);
 
-// Function to search and populate a "hash table"
+// Function to search the tree and populate a "hash table"
 function treeExplorer(root: TreeNode, nodeCode: string = "") {
 	if (typeof root.value == "number") {
 		// Explore first child
@@ -81,7 +73,7 @@ function treeExplorer(root: TreeNode, nodeCode: string = "") {
 		for (let i = 0; i < hashMap.length; i++) {
 			if (!hashMap[i]) {
 				hashMap[i] = {
-					element: (<IElements>root.value).char,
+					character: (<IElements>root.value).char,
 					code: nodeCode
 				};
 				break;
@@ -90,6 +82,7 @@ function treeExplorer(root: TreeNode, nodeCode: string = "") {
 	}
 }
 
+console.info("Creating the tree...");
 // Loop until the whole tree is built
 while (elementNodes.length > 1) {
 	// Each index in this array carries [indexOfNode, Node]
@@ -164,26 +157,46 @@ while (elementNodes.length > 1) {
 	elementNodes.splice(minorFreqs[1][0], 1);
 }
 
+console.info("Creating characters code table...");
 // Mapping the HashMap
 treeExplorer(elementNodes[0]);
 
-// TODO - Generate a new "compressed" file
+console.info("Generating a compressed-pseudo-binary-lorem.txt file...");
+// Generate a new "compressed" file
+var compressedBinaryText = "";
 
-// aaaabbccdddef
-const txt = "000010110110010011111111111011100";
+for (let hex of loremData) {
+	let currentChar = String.fromCharCode(hex);
+
+	for (let element of hashMap) {
+		if (element.character == currentChar) {
+			compressedBinaryText += element.code;
+			break;
+		}
+	}
+}
+
+fs.writeFileSync(__dirname + "assets/compressed-pseudo-binary-lorem.txt", compressedBinaryText);
+
+console.info("Generating a result-lorem.txt file from the compressed file...");
+// Decompress compressed file
+const compressedLoremData = fs.readFileSync(__dirname + "assets/compressed-pseudo-binary-lorem.txt");
 
 var resultTxt = "";
 var buffer = "";
 
-for (let i = 0; i < txt.length; i++) {
-	buffer += txt.charAt(i);
-	for (let j = 0; j < hashMap.length; j++) {
-		if (buffer === hashMap[j].code) {
-			resultTxt += hashMap[j].element;
+for (let hex of compressedLoremData) {
+	buffer += String.fromCharCode(hex);
+
+	for (let element of hashMap) {
+		if (buffer === element.code) {
+			resultTxt += element.character;
 			buffer = "";
 			break;
 		}
 	}
 }
 
-console.log(resultTxt);
+fs.writeFileSync(__dirname + "assets/result-lorem.txt", resultTxt);
+
+console.info("Program finished successfully! Files created in 'build/assets/' directory.");
